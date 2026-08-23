@@ -13,8 +13,7 @@ st.set_page_config(
     layout="centered",
 )
 
-# Путь к шаблону спецификации
-TEMPLATE_PATH = Path("templates") / "Шаблон_спецификации_РД.xlsx"
+
 
 st.title("📄 Спецификация: PDF → XLSX")
 #st.markdown("Загрузите PDF-файл спецификации для её перевода в формат XLSX.")
@@ -38,8 +37,15 @@ if pdf_file is not None:
                     tmp_pdf.write(pdf_file.getvalue())
                     pdf_path = tmp_pdf.name
 
-                spec, restored_rows = pdf_spec_to_row_list(pdf_path)
-                xlsx_bytes = row_list_to_xlsx_bytes(spec, restored_rows, Path(pdf_file.name).stem, TEMPLATE_PATH)
+                spec, template_cols_count,restored_rows = pdf_spec_to_row_list(pdf_path)
+                if template_cols_count == 9:
+                    # Путь к шаблону спецификации
+                    TEMPLATE_PATH = Path("templates") / "Шаблон_спецификации_РД.xlsx"
+                elif template_cols_count == 10:
+                    TEMPLATE_PATH = Path("templates") / "Шаблон_спецификации_РД_KKS.xlsx"
+                else:
+                    raise ValueError("В спецификации должно быть 9 или 10 столбцов.")
+                xlsx_bytes = row_list_to_xlsx_bytes(spec, template_cols_count, restored_rows, Path(pdf_file.name).stem, TEMPLATE_PATH)
                 xlsx_name = Path(pdf_file.name).with_suffix(".xlsx").name
 
                 st.success("✅ Файл успешно обработан!")

@@ -1,6 +1,6 @@
 import re
 
-def gost_spec_title():
+def gost_spec_title(template_cols_count):
      """Заголовок таблицы спецификации по ГОСТ 21.110-2013"""
      spec_title = ["Поз.",
                    "Наименование и техническая характеристика",
@@ -11,9 +11,12 @@ def gost_spec_title():
                    "Количество",
                    "Масса 1 ед., кг",
                    "Примечание"]
+     if template_cols_count == 10: spec_title.insert(1, "Код KKS")
+
+
      return spec_title
 
-def normalize_row(spec_line, prev_spec_line):
+def normalize_row(spec_line, prev_spec_line, template_cols_count):
     """Очищает строку: заменяет удаляет лишние пробелы."""
     for col in spec_line:
         if not isinstance(col, str):
@@ -26,17 +29,17 @@ def normalize_row(spec_line, prev_spec_line):
         col = col.strip()
         # if col == '': col = "—"  # замена '' на длинное тире (для нейросетей)
     # ставим пробел при ГОСТ12345-67
-    spec_line[2] = re.sub(r'ГОСТ(\d)', r'ГОСТ \1', spec_line[2])
+    spec_line[template_cols_count-7] = re.sub(r'ГОСТ(\d)', r'ГОСТ \1', spec_line[template_cols_count-7])
     # Приводим единицу измерения к стандартному обозначению
-    spec_line[5] = normalize_unit(spec_line[5])
+    spec_line[template_cols_count-4] = normalize_unit(spec_line[template_cols_count-4])
     # Преобразовываем str в int или float
-    spec_line[6] = string_to_number(spec_line[6])
-    spec_line[7] = string_to_number(spec_line[7])
+    spec_line[template_cols_count-3] = string_to_number(spec_line[template_cols_count-3])
+    spec_line[template_cols_count-2] = string_to_number(spec_line[template_cols_count-2])
     # Меняем точку на запятую в Кол-во и Ед. масса
     #spec_line[6] = spec_line[6].replace('.', ',')
     #spec_line[7] = spec_line[7].replace('.', ',')
-    if spec_line[1].lower().strip() in ["то же", "тоже"]:
-         spec_line[1] = prev_spec_line[1]
+    if spec_line[template_cols_count-8].lower().strip() in ["то же", "тоже"]:
+         spec_line[template_cols_count-8] = prev_spec_line[template_cols_count-8]
 
 def correct_row(line, pattern):
     restored_cols: list[int] = []

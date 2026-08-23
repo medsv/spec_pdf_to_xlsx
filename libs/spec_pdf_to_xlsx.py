@@ -1,10 +1,13 @@
+#from openpyxl.cell import _CellOrMergedCell
 import pymupdf
 from copy import copy
 from io import BytesIO
 from openpyxl import load_workbook
+from openpyxl.cell.cell import Cell
+from openpyxl.cell.cell import MergedCell
 from libs.utils import normalize_row, gost_spec_title, correct_row
 from openpyxl.styles import PatternFill
-
+import unicodedata
 
 def pdf_spec_to_row_list(pdf_path):
     """Извлекает из pdf-файла спецификации список строк спецификации."""
@@ -18,7 +21,7 @@ def parse_spec(doc):
     restored_rows: dict[int, list[int]] = {}
     prev_spec_line = None
     first_table = True
-    template_cols_count = 9  # по умолчанию табдица по ГОСТ
+    template_cols_count = 9  
     for page in doc:
         tabs = page.find_tables()  # locate and extract any tables on page
         if not tabs:
@@ -33,7 +36,12 @@ def parse_spec(doc):
                     #if "Примечание" in line or "Код продукции" in line:  # шапка таблицы спецификации
                     if any("приме" in str(s).lower().strip() for s in line) or \
                             all(str(dig) in line for dig in range(1,10)): # шапка таблицы спецификации
-                        template_cols_count = 9
+                        if first_table:
+                            if any("kks" in str(s).lower().strip() for s in line) or \
+                                all(str(dig) in line for dig in range(1,11)):
+                                template_cols_count = 10  # таблица с KKS
+                            else: 
+                                template_cols_count = 9  # таблица по ГОСТ
                         #if any("kks" in str(s).lower().strip() for s in line): template_cols_count = 10
                         spec_line_cols_count = len(line)  # количество столбцов в pdf-таблице представления спецификации
                         pattern = detect_pattern(line)  # шаблон таблицы спецификации
@@ -42,21 +50,21 @@ def parse_spec(doc):
                             continue
                             #raise ValueError(f"В спецификации должно быть 9 столбцов, а не {spec_col_count}")
                         if first_table:  # только для первой шапки таблицы
-                            spec.append(gost_spec_title())  # добавляем в спецификацию шапку по ГОСТ 21.110-2013
+                            spec.append(gost_spec_title(template_cols_count))  # добавляем в спецификацию шапку по ГОСТ 21.110-2013
                             spec_row_count += 1
                         in_spec = True # внутри спецификации
                         first_table = False
                         continue
-                if in_spec:
+                else:
                     # if None in line[first_index: last_index+1]: break
                     if len(line) != spec_line_cols_count or None in [line[i] for i in pattern]: continue  # игнорируем строки, набор столбцов которых не соответствует ранее зафиксированному набору для cпецификации
                     restored_cols = correct_row(line, pattern)
                     spec_line = [line[i] for i in pattern]
                     if all(cell == '' for cell in spec_line): continue  # Все столбцы содержат ''
-                    if spec_line == ['1', '2', '3', '4', '5', '6', '7', '8', '9']: continue  # ['1', '2', '3', '4', '5', '6', '7', '8', '9'] игнорируем
-
+                    #if spec_line[:9] == ['1', '2', '3', '4', '5', '6', '7', '8', '9']: continue  # ['1', '2', '3', '4', '5', '6', '7', '8', '9'] игнорируем
+                    if all(str(dig) in line for dig in range(1,10)): continue  
                     
-                    normalize_row(spec_line, prev_spec_line)
+                    normalize_row(spec_line, prev_spec_line, template_cols_count)
                     spec.append(spec_line)
                     spec_row_count += 1
                     if restored_cols:
@@ -65,7 +73,7 @@ def parse_spec(doc):
                     # spec.append(normalize_row(line[first_index: last_index+1]))
     if spec == []:
         raise ValueError("В файле спецификация не найдена")
-    return spec, restored_rows
+    return spec, template_cols_count, restored_rows
 
 
 def detect_pattern(line):
@@ -75,14 +83,15 @@ def detect_pattern(line):
     """
     pattern = []
     for i, col in enumerate(line):
-        if col == '' or col is None:
+        if col == '' or col is None or "формат" in col.lower():
             continue
         pattern.append(i)
     return pattern
     # return [i for i, col in enumerate(line) if col not in ('', None)] # быстрее на 10–30%
 
+from openpyxl.utils.exceptions import IllegalCharacterError
 
-def row_list_to_xlsx_bytes(spec, restored_rows, pdf_stem, template_path):
+def row_list_to_xlsx_bytes(spec, template_cols_count, restored_rows, pdf_stem, template_path):
     """Формирует xlsx-файл спецификации на базе шаблона и возвращает его в виде байтов."""
     if not template_path.exists():
         raise FileNotFoundError(f"Шаблон спецификации не найден: {template_path}")
@@ -98,7 +107,7 @@ def row_list_to_xlsx_bytes(spec, restored_rows, pdf_stem, template_path):
     # 1. Сохраняем референсные стили из строки 3 (A3:I3)
     # Именно здесь в шаблоне настроены перенос текста, выравнивание и границы
     ref_styles = {}
-    for col_idx in range(1, 10): # Столбцы A-I (индексы 1-9)
+    for col_idx in range(1, template_cols_count+1): # Столбцы A-I(J) (индексы 1-9(10))
         ref_cell = ws.cell(row=3, column=col_idx)
         ref_styles[col_idx] = {
             'font': copy(ref_cell.font),
@@ -116,11 +125,20 @@ def row_list_to_xlsx_bytes(spec, restored_rows, pdf_stem, template_path):
     for row_offset, row_values in enumerate(data_rows):
         row_idx = 3 + row_offset
         for col_idx, value in enumerate(row_values, start=1):
-            if col_idx > 9:
-                break
+            #if col_idx > 9:
+            #    break
                 
             cell = ws.cell(row=row_idx, column=col_idx)
-            cell.value = value
+            # ws.cell() всегда возвращает Cell (не MergedCell),
+            # но защищаемся от случая объединённой ячейки
+            if isinstance(cell, MergedCell):
+                continue
+            try:
+                cell.value = value
+            except IllegalCharacterError:
+                cleaned_value = "".join(ch for ch in value if not unicodedata.category(ch).startswith("C"))
+                cell.value = cleaned_value
+
             
             # Применяем скопированные стили из эталонной строки
             styles = ref_styles.get(col_idx)
@@ -134,14 +152,17 @@ def row_list_to_xlsx_bytes(spec, restored_rows, pdf_stem, template_path):
     # 4. Жестко фиксируем автофильтр на строке заголовков (строка 2)
     # Указываем диапазон до последней заполненной строки, чтобы фильтр не "уехал"
     last_row = 2 + len(data_rows)
-    if last_row > 2:
+    
+    if template_cols_count == 9:
         ws.auto_filter.ref = f"A2:I{last_row}"
+    elif template_cols_count == 10:
+        ws.auto_filter.ref = f"A2:J{last_row}"
     else:
-        ws.auto_filter.ref = "A2:I2"
+        raise ValueError("Для таблицы с {template_cols_count} столбцом(ами) шаблон отсутствует")
 
     # 5. Закрашиваем красным пустые ячейки в столбце "Наименование"
     for row_idx in range(3, last_row + 1):
-        cell = ws.cell(row=row_idx, column=2)
+        cell = ws.cell(row=row_idx, column=template_cols_count-7)
         if not cell.value:
             cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
