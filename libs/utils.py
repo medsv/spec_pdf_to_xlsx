@@ -52,16 +52,18 @@ def gost_spec_title(template_cols_count):
      return spec_title
 
 def normalize_row(spec_line, prev_spec_line, template_cols_count):
-    """Очищает строку: заменяет удаляет лишние пробелы."""
-    for col in spec_line:
+    """Очищает строку: убирает лишние пробелы и переносы строк."""
+    for i, col in enumerate(spec_line):
         if not isinstance(col, str):
             continue
         # Замена символов перевода строки на пробел
-        # text = text.replace('\n', ' ')
+        col = col.replace('\n', ' ')
         # Удаление множественных пробелов (один или более пробелов заменяем на один)
         col = re.sub(r' +', ' ', col)
-        # Удаление пробелов в начале и конце (опционально)
+        # Удаление пробелов в начале и конце
         col = col.strip()
+        # Записываем очищенное значение обратно в строку спецификации
+        spec_line[i] = col
         # if col == '': col = "—"  # замена '' на длинное тире (для нейросетей)
     # ставим пробел при ГОСТ12345-67
     spec_line[template_cols_count-7] = re.sub(r'ГОСТ(\d)', r'ГОСТ \1', spec_line[template_cols_count-7])
@@ -200,5 +202,5 @@ def row_list_to_md(lines):
     """Преобразует список строк в Markdown-таблицу."""
     md = ""
     for line in lines:
-        md += "| " + " | ".join(line) + " |\n"
+        md += "| " + " | ".join(str(cell) for cell in line) + " |\n"
     return md

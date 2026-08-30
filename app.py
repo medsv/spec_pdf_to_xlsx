@@ -32,7 +32,7 @@ if pdf_file is not None:
         with st.spinner("Идёт анализ PDF ... Пожалуйста, подождите."):
             pdf_path = None
             try:
-                # Сохраняем PDF во временный файл (нужен pymupdf)
+                # Сохраняем PDF во временный файл (нужен pdfplumber)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                     tmp_pdf.write(pdf_file.getvalue())
                     pdf_path = tmp_pdf.name

@@ -1,5 +1,5 @@
 #from openpyxl.cell import _CellOrMergedCell
-import pymupdf
+import pdfplumber
 from copy import copy
 from io import BytesIO
 from openpyxl import load_workbook
@@ -10,25 +10,26 @@ from openpyxl.styles import PatternFill
 import unicodedata
 
 def pdf_spec_to_row_list(pdf_path):
-    """Извлекает из pdf-файла спецификации список строк спецификации."""
-    with pymupdf.open(pdf_path) as doc:
-        return parse_spec(doc)
+    """Извлекает из pdf-файла спецификации список строк спецификации (pdfplumber)."""
+    with pdfplumber.open(pdf_path) as pdf:
+        return parse_spec(pdf.pages)
 
 
-def parse_spec(doc):
+def parse_spec(pages):
     spec = []
     spec_row_count = 0
     restored_rows: dict[int, list[int]] = {}
     prev_spec_line = None
     first_table = True
     template_cols_count = 9  
-    for page in doc:
+    for page in pages:
         tabs = page.find_tables()  # locate and extract any tables on page
         if not tabs:
             continue
         for tab in tabs:
             in_spec = False  # не дошёл до спецификации
             lines = tab.extract()
+            lines = [[_decode_cell(c) for c in line] for line in lines]
             for line in lines:
                 if len(line) < template_cols_count: continue
                 #print(line)
@@ -75,6 +76,26 @@ def parse_spec(doc):
     if spec == []:
         raise ValueError("В файле спецификация не найдена")
     return spec, template_cols_count, restored_rows
+
+
+import re as _re
+
+_CID_RE = _re.compile(r'\(cid:(\d+)\)')
+
+def _decode_cell(cell):
+    """Восстанавливает текст ячейки из артефактов pdfplumber/pdfminer.
+
+    При работе с нестандартными шрифтами (напр. GOST-шрифты без корректного
+    ToUnicode CMap) pdfminer может выдать токены вида `(cid:N)` вместо символов.
+    Здесь они заменяются на соответствующие символы по их коду (chr(N)), после
+    чего управляющие символы заменяются пробелом, чтобы не попадали в XLSX.
+    """
+    if not isinstance(cell, str):
+        return cell
+    text = _CID_RE.sub(lambda m: chr(int(m.group(1))), cell)
+    # Управляющие символы (кроме табуляции, переноса строки и CR) -> пробел
+    text = "".join(ch if ch.isprintable() or ch in "\t\n\r" else " " for ch in text)
+    return text
 
 
 def detect_pattern(line):

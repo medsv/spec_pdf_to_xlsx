@@ -11,7 +11,7 @@ import pprint
 from pathlib import Path
 
 from libs.spec_pdf_to_xlsx import pdf_spec_to_row_list
-from libs.spec_pdf_to_xlsx import row_list_to_md
+from libs.utils import row_list_to_md
 
 
 def main(pdf_path: str) -> None:
@@ -22,7 +22,7 @@ def main(pdf_path: str) -> None:
 
     print(f"Обработка файла: {path.name}")
     try:
-        spec = pdf_spec_to_row_list(str(path))
+        spec, template_cols_count, restored_rows = pdf_spec_to_row_list(str(path))
         print(row_list_to_md(spec))
     except Exception as e:
         print(f"Ошибка при обработке: {e}")
