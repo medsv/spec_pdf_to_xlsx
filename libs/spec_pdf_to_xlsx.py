@@ -5,7 +5,7 @@ from io import BytesIO
 from openpyxl import load_workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.cell.cell import MergedCell
-from libs.utils import normalize_row, gost_spec_title, correct_row
+from libs.utils import normalize_row, gost_spec_title, correct_row, extract_gosts
 from openpyxl.styles import PatternFill
 import unicodedata
 
@@ -91,6 +91,65 @@ def detect_pattern(line):
 
 from openpyxl.utils.exceptions import IllegalCharacterError
 
+def spec_to_unique_gosts(spec, template_cols_count) -> list[str]:
+    """Собирает уникальный перечень всех ГОСТов, упомянутых в спецификации.
+
+    ГОСТы извлекаются из содержательных колонок «Наименование…» и
+    «Тип, марка, обозначение…»:
+      - для таблицы на 9 столбцов — индексы [1, 2];
+      - для таблицы с кодом KKS (10 столбцов) — индексы [2, 3].
+    Сохраняется порядок первого вхождения каждого ГОСТа.
+    """
+    if template_cols_count == 9:
+        gost_cols = [1, 2]
+    elif template_cols_count == 10:
+        gost_cols = [2, 3]  # пропускаем «Код KKS» (индекс 1)
+    else:
+        raise ValueError(f"В спецификации должно быть 9 или 10 столбцов, а не {template_cols_count}")
+
+    unique: dict[str, None] = {}
+    for row in spec[1:]:  # первая строка — заголовок, её пропускаем
+        for idx in gost_cols:
+            if idx >= len(row):
+                continue
+            for gost in extract_gosts(row[idx]):
+                if gost not in unique:
+                    unique[gost] = None
+    return list(unique.keys())
+
+
+def fill_gosts_sheet(wb, gost_list: list[str]) -> None:
+    """Записывает перечень ГОСТов во вкладку «ГОСТы».
+
+    ГОСТы записываются в столбец A начиная со строки 2. К каждой ячейке
+    применяется формат эталонной ячейки A2 (границы, шрифт, выравнивание и т.д.).
+    Если ГОСТы не найдены, вкладка не изменяется (форматированная строка 2
+    сохраняется как образец).
+    """
+    if "ГОСТы" not in wb.sheetnames:
+        raise ValueError("В шаблоне отсутствует вкладка «ГОСТы»")
+    ws = wb["ГОСТы"]
+
+    # Эталонный формат берём из ячейки A2 (уже отформатированный образец)
+    ref_cell = ws.cell(row=2, column=1)
+    ref_style = {
+        'font': copy(ref_cell.font),
+        'border': copy(ref_cell.border),
+        'fill': copy(ref_cell.fill),
+        'alignment': copy(ref_cell.alignment),
+        'number_format': ref_cell.number_format,
+    }
+
+    for offset, gost in enumerate(gost_list):
+        cell = ws.cell(row=2 + offset, column=1)
+        cell.value = gost
+        cell.font = ref_style['font']
+        cell.border = ref_style['border']
+        cell.fill = ref_style['fill']
+        cell.alignment = ref_style['alignment']
+        cell.number_format = ref_style['number_format']
+
+
 def row_list_to_xlsx_bytes(spec, template_cols_count, restored_rows, pdf_stem, template_path):
     """Формирует xlsx-файл спецификации на базе шаблона и возвращает его в виде байтов."""
     if not template_path.exists():
@@ -171,6 +230,10 @@ def row_list_to_xlsx_bytes(spec, template_cols_count, restored_rows, pdf_stem, t
         for col_idx in row_values:
             cell = ws.cell(row=row_idx+1, column=col_idx+1)
             cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+
+    # 7. Формируем перечень уникальных ГОСТов и заполняем вкладку «ГОСТы»
+    gost_list = spec_to_unique_gosts(spec, template_cols_count)
+    fill_gosts_sheet(wb, gost_list)
 
     buffer = BytesIO()
     wb.save(buffer)
