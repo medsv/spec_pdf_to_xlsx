@@ -45,6 +45,7 @@ def parse_spec(doc):
                         #if any("kks" in str(s).lower().strip() for s in line): template_cols_count = 10
                         spec_line_cols_count = len(line)  # количество столбцов в pdf-таблице представления спецификации
                         pattern = detect_pattern(line)  # шаблон таблицы спецификации
+                        #print(pattern)
                         spec_col_count = len(pattern)
                         if spec_col_count != template_cols_count:
                             continue
