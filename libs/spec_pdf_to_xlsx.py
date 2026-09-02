@@ -5,7 +5,8 @@ from io import BytesIO
 from openpyxl import load_workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.cell.cell import MergedCell
-from libs.utils import normalize_row, gost_spec_title, correct_row, extract_gosts
+from libs.utils import normalize_row, gost_spec_title, correct_row, extract_gosts, encoding_correction
+
 from openpyxl.styles import PatternFill
 import unicodedata
 
@@ -67,6 +68,7 @@ def parse_spec(pages):
                     if all(str(dig) in line for dig in range(1,10)): continue  
                     
                     normalize_row(spec_line, prev_spec_line, template_cols_count)
+                    encoding_correction(spec_line)
                     spec.append(spec_line)
                     spec_row_count += 1
                     if restored_cols:

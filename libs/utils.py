@@ -78,7 +78,54 @@ def normalize_row(spec_line, prev_spec_line, template_cols_count):
     if spec_line[template_cols_count-8].lower().strip() in ["то же", "тоже"]:
          spec_line[template_cols_count-8] = prev_spec_line[template_cols_count-8]
 
+
+def fix_mojibake(text):
+    """
+    Исправляет mojibake: CP1251-байты, ошибочно декодированные как Latin-1.
+
+    Определяет, является ли строка результатом ошибочного декодирования
+    CP1251-байтов как Latin-1, и восстанавливает исходный текст.
+    Корректный текст (включая уже правильную кириллицу и ASCII) не затрагивается.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+
+    # Если в тексте уже есть настоящие кириллические Unicode-символы — не трогаем
+    if any('\u0400' <= c <= '\u04FF' for c in text):
+        return text
+
+    # Пытаемся закодировать строку как Latin-1
+    try:
+        bytes_data = text.encode('latin-1')
+    except UnicodeEncodeError:
+        # Строка содержит символы вне диапазона Latin-1 — уже корректный Unicode
+        return text
+
+    # Пытаемся декодировать байты как CP1251
+    try:
+        decoded = bytes_data.decode('cp1251')
+    except UnicodeDecodeError:
+        return text
+
+    # Проверяем: стала ли декодированная строка "более кириллической"?
+    alpha_count = sum(1 for c in decoded if c.isalpha())
+    if alpha_count == 0:
+        return text
+
+    cyrillic_count = sum(1 for c in decoded if '\u0400' <= c <= '\u04FF')
+
+    # Если >= 30% букв стали кириллическими — это был mojibake
+    if cyrillic_count / alpha_count >= 0.3:
+        return decoded
+
+    return text 
+
+def encoding_correction(spec_line):
+    for i, col in enumerate(spec_line):
+        spec_line[i] = fix_mojibake(col)
+
 def correct_row(line, pattern):
+    # Вызывается для каждой строки (полной, не усечённой до 9/10 колонок)
     restored_cols: list[int] = []
     for i, idx in enumerate(pattern[:-1]):  # до предпоследнего
         if not line[idx]:
@@ -87,6 +134,10 @@ def correct_row(line, pattern):
                 line[idx] = line[idx+1]
                 restored_cols.append(i)  # индексы восстановленных ячеек
     return restored_cols
+
+
+
+
 
 def string_to_number(col: str | None):
     if col is None:
