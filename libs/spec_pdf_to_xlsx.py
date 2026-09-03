@@ -35,6 +35,7 @@ def parse_spec(pages):
                 if len(line) < template_cols_count: continue
                 #print(line)
                 if not in_spec:
+                    encoding_correction(line)
                     #if "Примечание" in line or "Код продукции" in line:  # шапка таблицы спецификации
                     if any("приме" in str(s).lower().strip() for s in line) or \
                             all(str(dig) in line for dig in range(1,10)): # шапка таблицы спецификации
@@ -180,10 +181,7 @@ def row_list_to_xlsx_bytes(spec, template_cols_count, restored_rows, pdf_stem, t
         raise FileNotFoundError(f"Шаблон спецификации не найден: {template_path}")
 
     wb = load_workbook(template_path)
-    ws = wb.active
-    if ws is None:
-        raise ValueError("Не удалось получить активный лист из шаблона")
-
+    ws = wb["Спецификация"]
     # Записываем имя PDF в ячейку A1
     ws["A1"] = pdf_stem
     
