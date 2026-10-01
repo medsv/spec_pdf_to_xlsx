@@ -8,7 +8,7 @@ from libs.spec_pdf_to_xlsx import pdf_spec_to_row_list, row_list_to_xlsx_bytes
 
 # Настройки страницы
 st.set_page_config(
-    page_title="Конвертер спецификаций рабочей документации из PDF в XLSX",
+    page_title="Спецификация: PDF → XLSX",
     page_icon="📄",
     layout="centered",
 )
@@ -25,7 +25,7 @@ pdf_file = st.file_uploader(
 )
 
 if pdf_file is not None:
-    st.info(f"Загружен файл: **{pdf_file.name}** ({pdf_file.size / 1024:.1f} КБ)")
+    #st.info(f"Загружен файл: **{pdf_file.name}** ({pdf_file.size / 1024:.1f} КБ)")
 
     # 2. Кнопка запуска обработки
     if st.button("🚀 Извлечь данные из PDF и сформировать XLSX", type="primary"):
@@ -72,7 +72,8 @@ if pdf_file is not None:
                         pass
 
 else:
-    st.warning("Загрузите PDF файл спецификации для начала работы.")
+    #st.warning("Загрузите PDF файл спецификации для начала работы.")
+    pass
 
 st.markdown(
     """
