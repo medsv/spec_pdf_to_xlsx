@@ -10,28 +10,48 @@ from libs.utils import normalize_row, gost_spec_title, correct_row, extract_gost
 from openpyxl.styles import PatternFill
 import unicodedata
 
-def pdf_spec_to_row_list(pdf_path):
-    """Извлекает из pdf-файла спецификации список строк спецификации (pdfplumber)."""
+# Ключевые настройки табличного распознавания pdfplumber.
+# Используются по умолчанию, если пользователь не изменил их в интерфейсе.
+DEFAULT_TABLE_SETTINGS = {
+    "snap_tolerance": 3,
+    "join_tolerance": 3,
+    "intersection_tolerance": 3,
+    "edge_min_length": 3,
+}
+
+def pdf_spec_to_row_list(pdf_path, table_settings=None):
+    """Извлекает из pdf-файла спецификации список строк спецификации (pdfplumber).
+
+    table_settings — словарь настроек извлечения таблиц для pdfplumber.
+    Если не передан (None), используются DEFAULT_TABLE_SETTINGS.
+    """
+    if table_settings is None:
+        table_settings = DEFAULT_TABLE_SETTINGS
     with pdfplumber.open(pdf_path) as pdf:
-        return parse_spec(pdf.pages)
+        return parse_spec(pdf.pages, table_settings)
+    
 
 
-def parse_spec(pages):
+def parse_spec(pages, table_settings):
     spec = []
+    # Ключевые настройки для таблиц из узких прямоугольников
+
     spec_row_count = 0
     restored_rows: dict[int, list[int]] = {}
     prev_spec_line = None
     first_table = True
     template_cols_count = 9  
     for page in pages:
-        tabs = page.find_tables()  # locate and extract any tables on page
+        tabs = page.extract_tables(table_settings)
+        #tabs = page.find_tables()  # locate and extract any tables on page
         if not tabs:
             continue
         for tab in tabs:
             in_spec = False  # не дошёл до спецификации
-            lines = tab.extract()
-            lines = [[_decode_cell(c) for c in line] for line in lines]
-            for line in lines:
+            #lines = tab.extract()
+            #lines = [[_decode_cell(c) for c in line] for line in lines]
+            for line in tab:
+                line = _decode_cell(line)  # GOST-шрифты, ломающие Excel
                 if len(line) < template_cols_count: continue
                 #print(line)
                 if not in_spec:
