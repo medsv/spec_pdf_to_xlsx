@@ -27,7 +27,6 @@ if "table_settings" not in st.session_state:
 @st.dialog("Настройки pdfplumber")
 def pdfplumber_settings_dialog():
     """Модальное окно редактирования параметров извлечения таблиц pdfplumber."""
-    
     current = st.session_state["table_settings"]
 
     values = {}
@@ -79,6 +78,15 @@ pdf_file = st.file_uploader(
     "Выберите PDF файл, нажав Upload, или перетащите его сюда мышкой из Проводника", type=["pdf"]
 )
 
+# При загрузке нового файла сбрасываем настройки pdfplumber в значения по умолчанию
+uploaded_file_id = (pdf_file.name, pdf_file.size) if pdf_file is not None else None
+if st.session_state.get("uploaded_file_id") != uploaded_file_id:
+    st.session_state["uploaded_file_id"] = uploaded_file_id
+    st.session_state["table_settings"] = dict(DEFAULT_TABLE_SETTINGS)
+    # Сбрасываем ключи виджетов диалога настроек, чтобы он открывался с дефолтами
+    for key in DEFAULT_TABLE_SETTINGS:
+        st.session_state.pop(f"pdfplumber_{key}", None)
+
 if pdf_file is not None:
     #st.info(f"Загружен файл: **{pdf_file.name}** ({pdf_file.size / 1024:.1f} КБ)")
 
@@ -123,7 +131,7 @@ if pdf_file is not None:
                 )
 
             except Exception as e:
-                st.error(f"❌ Произошла ошибка при обработке файла: {e}")
+                st.error(f"❌ Ошибка: {e}")
                 #st.exception(e)
 
             finally:

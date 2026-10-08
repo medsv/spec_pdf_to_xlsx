@@ -32,8 +32,6 @@ def main(pdf_path: str) -> None:
     #pprint.pprint(spec, width=200)
 
 
-
-
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Использование: python test_pdf_spec.py <путь_к_pdf>")

@@ -2,3 +2,5 @@ libs/__pycache__/
 test_data/
 .venv/
 __pycache__/
+.kilo
+.vscode

@@ -29,8 +29,6 @@ def pdf_spec_to_row_list(pdf_path, table_settings=None):
         table_settings = DEFAULT_TABLE_SETTINGS
     with pdfplumber.open(pdf_path) as pdf:
         return parse_spec(pdf.pages, table_settings)
-    
-
 
 def parse_spec(pages, table_settings):
     spec = []
@@ -57,28 +55,29 @@ def parse_spec(pages, table_settings):
                 if not in_spec:
                     encoding_correction(line)
                     #if "Примечание" in line or "Код продукции" in line:  # шапка таблицы спецификации
-                    if any("приме" in str(s).lower().strip() for s in line) or \
-                            all(str(dig) in line for dig in range(1,10)): # шапка таблицы спецификации
+                    if not any("опросного" in str(s).lower().strip() for s in line): # шапка таблицы спецификации
                         if first_table:
-                            if any("kks" in str(s).lower().strip() for s in line) or \
-                                all(str(dig) in line for dig in range(1,11)):
-                                template_cols_count = 10  # таблица с KKS
-                            else: 
-                                template_cols_count = 9  # таблица по ГОСТ
-                        #if any("kks" in str(s).lower().strip() for s in line): template_cols_count = 10
-                        spec_line_cols_count = len(line)  # количество столбцов в pdf-таблице представления спецификации
-                        pattern = detect_pattern(line)  # шаблон таблицы спецификации
-                        #print(pattern)
-                        spec_col_count = len(pattern)
-                        if spec_col_count != template_cols_count:
                             continue
-                            #raise ValueError(f"В спецификации должно быть 9 столбцов, а не {spec_col_count}")
-                        if first_table:  # только для первой шапки таблицы
-                            spec.append(gost_spec_title(template_cols_count))  # добавляем в спецификацию шапку по ГОСТ 21.110-2013
-                            spec_row_count += 1
-                        in_spec = True # внутри спецификации
+                        else:
+                            if not all(str(dig) in line for dig in range(1,9)):
+                                continue
+                    else:
+                        if any("kks" in str(s).lower().strip() for s in line):
+                            template_cols_count = 10  # таблица с KKS
+                        else: 
+                            template_cols_count = 9  # таблица по ГОСТ
+                    if first_table:
+                        spec.append(gost_spec_title(template_cols_count))  # добавляем в спецификацию шапку по ГОСТ 21.110-2013
+                        spec_row_count += 1
                         first_table = False
-                        continue
+                    spec_line_cols_count = len(line)  # количество столбцов в pdf-таблице представления спецификации
+                    pattern = detect_pattern(line, template_cols_count)  # шаблон таблицы спецификации
+                    #print(pattern)
+                    spec_col_count = len(pattern)
+                    if spec_col_count != template_cols_count:
+                        #continue
+                        raise ValueError(f"Идентифицированы {spec_col_count} столбца(ов) вместо {template_cols_count}.")
+                    in_spec = True # внутри спецификации
                 else:
                     # if None in line[first_index: last_index+1]: break
                     if len(line) != spec_line_cols_count or None in [line[i] for i in pattern]: continue  # игнорируем строки, набор столбцов которых не соответствует ранее зафиксированному набору для cпецификации
@@ -86,7 +85,8 @@ def parse_spec(pages, table_settings):
                     spec_line = [line[i] for i in pattern]
                     if all(cell == '' for cell in spec_line): continue  # Все столбцы содержат ''
                     #if spec_line[:9] == ['1', '2', '3', '4', '5', '6', '7', '8', '9']: continue  # ['1', '2', '3', '4', '5', '6', '7', '8', '9'] игнорируем
-                    if all(str(dig) in line for dig in range(1,10)): continue  
+                    # range(1,9) потому что 9-й столбец может быть испорчен номером страницы
+                    if all(str(dig) in line for dig in range(1,9)): continue  
                     
                     normalize_row(spec_line, prev_spec_line, template_cols_count)
                     encoding_correction(spec_line)
@@ -121,7 +121,7 @@ def _decode_cell(cell):
     return text
 
 
-def detect_pattern(line):
+def detect_pattern(line, template_cols_count):
     """Определяет шаблон таблицы спецификации по шапке спецификации (в которой все поля не пустые).
     input: line - список столбцов pdf-таблицы спецификации
     output: pattern - список индексов столбцов, содерщащих данные спецификации.
@@ -131,6 +131,8 @@ def detect_pattern(line):
         if col == '' or col is None or "формат" in col.lower():
             continue
         pattern.append(i)
+        if len(pattern) == template_cols_count + 1:  # учёт таблиц с квадратиком в шапке в правом верхнем углу
+            pattern = pattern[:template_cols_count]
     return pattern
     # return [i for i, col in enumerate(line) if col not in ('', None)] # быстрее на 10–30%
 
